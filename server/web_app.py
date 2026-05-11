@@ -33,6 +33,38 @@ app = Flask(
 
 # Buttons in the dashboard pending-signals panel are OFF by default.
 # Set VO_ENABLE_SIGNAL_BUTTONS=1 in Render env to turn them on.
+# ── Basic auth ──
+import base64
+from functools import wraps
+from flask import Response
+
+VO_USER = os.getenv("VO_DASHBOARD_USER", "")
+VO_PASS = os.getenv("VO_DASHBOARD_PASSWORD", "")
+AUTH_ENABLED = bool(VO_USER and VO_PASS)
+
+def _check_auth(auth_header: str) -> bool:
+    if not auth_header or not auth_header.startswith("Basic "):
+        return False
+    try:
+        decoded = base64.b64decode(auth_header[6:]).decode("utf-8")
+        user, _, pw = decoded.partition(":")
+        return user == VO_USER and pw == VO_PASS
+    except Exception:
+        return False
+
+@app.before_request
+def _require_auth():
+    if not AUTH_ENABLED:
+        return None
+    if request.path == "/api/health":
+        return None  # let Render health check through
+    if _check_auth(request.headers.get("Authorization", "")):
+        return None
+    return Response(
+        "Authentication required",
+        401,
+        {"WWW-Authenticate": 'Basic realm="FuturesForged VO"'},
+    )
 ENABLE_SIGNAL_BUTTONS = os.getenv("VO_ENABLE_SIGNAL_BUTTONS", "0") == "1"
 
 
