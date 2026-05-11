@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>FuturesForged — Virtual Office</title>
+  <style>
+    :root {
+      --bg:        #0a0e14;
+      --panel:     #11161e;
+      --panel-2:   #181f2a;
+      --line:      #1f2937;
+      --text:      #e6edf3;
+      --muted:     #8b95a7;
+      --green:     #00e5a0;
+      --red:       #ff5a6a;
+      --amber:     #ffb547;
+      --blue:      #6cb6ff;
+      --accent:    #c5a572;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0; padding: 0;
+      background: var(--bg); color: var(--text);
+      font-family: ui-monospace, 'JetBrains Mono', 'Fira Code', Consolas, monospace;
+      font-size: 13px;
+    }
+    header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 22px; border-bottom: 1px solid var(--line);
+      background: linear-gradient(180deg, var(--panel) 0%, var(--bg) 100%);
+    }
+    header h1 {
+      margin: 0; font-size: 14px; letter-spacing: 2px;
+      color: var(--accent);
+    }
+    header h1 span { color: var(--muted); margin-left: 8px; font-weight: 400; }
+    nav a {
+      color: var(--muted); text-decoration: none; margin-left: 18px;
+      font-size: 12px; letter-spacing: 1px;
+    }
+    nav a:hover { color: var(--text); }
+    .grid {
+      display: grid; gap: 14px;
+      grid-template-columns: 1fr 1fr;
+      padding: 18px 22px;
+    }
+    @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 14px 16px;
+    }
+    .panel h2 {
+      margin: 0 0 10px 0; font-size: 11px; letter-spacing: 2px;
+      color: var(--muted); font-weight: 600;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .panel h2 .count {
+      background: var(--panel-2); color: var(--text); border-radius: 10px;
+      padding: 2px 8px; font-size: 10px; letter-spacing: 1px;
+    }
+    .row {
+      display: flex; padding: 6px 0; border-bottom: 1px solid var(--line);
+      font-size: 12px; gap: 10px;
+    }
+    .row:last-child { border-bottom: none; }
+    .row .ts { color: var(--muted); width: 70px; flex-shrink: 0; }
+    .row .src { color: var(--blue); width: 90px; flex-shrink: 0; }
+    .row .msg { flex: 1; word-break: break-word; }
+    .lv-error  { color: var(--red); }
+    .lv-warn   { color: var(--amber); }
+    .lv-trade  { color: var(--green); }
+    .lv-signal { color: var(--accent); }
+    .pos-LONG  { color: var(--green); }
+    .pos-SHORT { color: var(--red); }
+    .empty { color: var(--muted); font-style: italic; padding: 10px 0; }
+    .pill {
+      display: inline-block; padding: 2px 8px; border-radius: 10px;
+      font-size: 10px; letter-spacing: 1px; background: var(--panel-2);
+    }
+    .pill.disabled { color: var(--muted); }
+    .pill.enabled  { color: var(--green); }
+    button.act {
+      background: transparent; color: var(--muted); border: 1px solid var(--line);
+      padding: 3px 10px; border-radius: 4px; cursor: not-allowed;
+      font-family: inherit; font-size: 11px; letter-spacing: 1px;
+    }
+    button.act.live { color: var(--green); border-color: var(--green); cursor: pointer; }
+    button.act.live:hover { background: rgba(0,229,160,.1); }
+    button.reject.live { color: var(--red); border-color: var(--red); }
+    button.reject.live:hover { background: rgba(255,90,106,.1); }
+    .health { font-size: 10px; color: var(--muted); padding: 8px 22px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>FUTURESFORGED <span>· Virtual Office</span></h1>
+    <nav>
+      <a href="/">DASHBOARD</a>
+      <a href="/tree">WORKFLOW TREE</a>
+      <a href="/api/health" target="_blank">HEALTH</a>
+    </nav>
+  </header>
+
+  <div class="health" id="health-bar">connecting…</div>
+
+  <div class="grid">
+    <div class="panel">
+      <h2>RECENT EVENTS <span class="count" id="events-count">0</span></h2>
+      <div id="events"></div>
+    </div>
+
+    <div class="panel">
+      <h2>RECENT TRADES <span class="count" id="trades-count">0</span></h2>
+      <div id="trades"></div>
+    </div>
+
+    <div class="panel" style="grid-column: 1 / -1;">
+      <h2>
+        PENDING SIGNALS
+        <span>
+          <span class="pill {{ 'enabled' if enable_signal_buttons else 'disabled' }}">
+            buttons {{ 'ON' if enable_signal_buttons else 'OFF' }}
+          </span>
+          <span class="count" id="pending-count" style="margin-left:8px;">0</span>
+        </span>
+      </h2>
+      <div id="pending"></div>
+    </div>
+
+    <div class="panel" style="grid-column: 1 / -1;">
+      <h2>LATEST ACCOUNT SNAPSHOTS <span class="count" id="snap-count">0</span></h2>
+      <div id="snapshots"></div>
+    </div>
+  </div>
+
+  <script>
+    const BUTTONS_LIVE = {{ 'true' if enable_signal_buttons else 'false' }};
+
+    function fmtTs(iso) {
+      try { return new Date(iso).toLocaleTimeString('en-GB', {hour12:false}); }
+      catch { return iso; }
+    }
+
+    function esc(s) {
+      if (s == null) return '';
+      return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+    }
+
+    async function loadEvents() {
+      const r = await fetch('/api/events?limit=30');
+      const rows = await r.json();
+      document.getElementById('events-count').textContent = rows.length;
+      const el = document.getElementById('events');
+      el.innerHTML = rows.length === 0
+        ? '<div class="empty">no events yet</div>'
+        : rows.map(e => `
+          <div class="row">
+            <div class="ts">${fmtTs(e.ts)}</div>
+            <div class="src lv-${esc(e.level)}">${esc(e.source)}</div>
+            <div class="msg lv-${esc(e.level)}">${esc(e.message)}</div>
+          </div>`).join('');
+    }
+
+    async function loadTrades() {
+      const r = await fetch('/api/trades?limit=30');
+      const rows = await r.json();
+      document.getElementById('trades-count').textContent = rows.length;
+      const el = document.getElementById('trades');
+      el.innerHTML = rows.length === 0
+        ? '<div class="empty">no trades yet</div>'
+        : rows.map(t => `
+          <div class="row">
+            <div class="ts">${fmtTs(t.ts)}</div>
+            <div class="src pos-${esc(t.direction)}">${esc(t.direction)} ${esc(t.qty)}× ${esc(t.instrument)}</div>
+            <div class="msg">${esc(t.account_id)} · <i>${esc(t.strategy)}</i>${t.pnl!=null?'  $'+Number(t.pnl).toFixed(2):''}</div>
+          </div>`).join('');
+    }
+
+    async function loadPending() {
+      const r = await fetch('/api/pending?status=pending&limit=30');
+      const rows = await r.json();
+      document.getElementById('pending-count').textContent = rows.length;
+      const el = document.getElementById('pending');
+      el.innerHTML = rows.length === 0
+        ? '<div class="empty">no pending signals</div>'
+        : rows.map(s => `
+          <div class="row">
+            <div class="ts">${fmtTs(s.ts)}</div>
+            <div class="src pos-${esc(s.direction)}">${esc(s.direction)} ${esc(s.qty)}× ${esc(s.instrument)}</div>
+            <div class="msg">
+              ${esc(s.account_id)} · <i>${esc(s.strategy)}</i> · entry ${esc(s.entry)} stop ${esc(s.stop)} tp ${esc(s.tp)}
+              <span style="float:right;">
+                <button class="act ${BUTTONS_LIVE?'live':''}" onclick="decide(${s.id},'approved')">APPROVE</button>
+                <button class="act reject ${BUTTONS_LIVE?'live':''}" onclick="decide(${s.id},'rejected')">REJECT</button>
+              </span>
+            </div>
+          </div>`).join('');
+    }
+
+    async function loadSnapshots() {
+      const r = await fetch('/api/snapshots?limit=10');
+      const rows = await r.json();
+      document.getElementById('snap-count').textContent = rows.length;
+      const el = document.getElementById('snapshots');
+      el.innerHTML = rows.length === 0
+        ? '<div class="empty">no snapshots yet</div>'
+        : rows.map(s => `
+          <div class="row">
+            <div class="ts">${fmtTs(s.ts)}</div>
+            <div class="src">${esc(s.account_id)}</div>
+            <div class="msg">
+              bal $${s.balance!=null?Number(s.balance).toFixed(2):'-'}  ·
+              floor $${s.floor!=null?Number(s.floor).toFixed(2):'-'}
+              ${s.floor_locked?'<span class="pill enabled">LOCKED</span>':''}
+              ${s.passed?'<span class="pill enabled">PASSED</span>':''}
+            </div>
+          </div>`).join('');
+    }
+
+    async function decide(id, status) {
+      if (!BUTTONS_LIVE) {
+        alert('Signal approval buttons are disabled.\nSet VO_ENABLE_SIGNAL_BUTTONS=1 in Render to enable.');
+        return;
+      }
+      const r = await fetch(`/api/pending/${id}/decision`, {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({status, by:'web'}),
+      });
+      if (!r.ok) alert('failed: ' + r.status);
+      await loadPending();
+    }
+
+    async function loadHealth() {
+      try {
+        const r = await fetch('/api/health');
+        const j = await r.json();
+        document.getElementById('health-bar').textContent =
+          `health: ${j.ok?'OK':'FAIL'}  ·  db: ${JSON.stringify(j.db)}  ·  signal_buttons: ${j.flags.signal_buttons}`;
+      } catch (e) {
+        document.getElementById('health-bar').textContent = 'health check failed';
+      }
+    }
+
+    async function refresh() {
+      await Promise.all([loadEvents(), loadTrades(), loadPending(), loadSnapshots()]);
+    }
+
+    loadHealth();
+    refresh();
+    setInterval(refresh, 5000);
+  </script>
+</body>
+</html>

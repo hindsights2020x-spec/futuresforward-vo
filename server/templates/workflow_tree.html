@@ -1,0 +1,367 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>FuturesForged — Workflow Tree</title>
+  <style>
+    :root {
+      --bg:        #0a0e14;
+      --panel:     #11161e;
+      --line:      #1f2937;
+      --text:      #e6edf3;
+      --muted:     #8b95a7;
+      --green:     #00e5a0;
+      --red:       #ff5a6a;
+      --amber:     #ffb547;
+      --blue:      #6cb6ff;
+      --violet:    #b78bff;
+      --accent:    #c5a572;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0; padding: 0; height: 100%;
+      background: var(--bg); color: var(--text);
+      font-family: ui-monospace, 'JetBrains Mono', 'Fira Code', Consolas, monospace;
+      font-size: 13px;
+    }
+    header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 22px; border-bottom: 1px solid var(--line);
+      background: linear-gradient(180deg, var(--panel) 0%, var(--bg) 100%);
+    }
+    header h1 { margin: 0; font-size: 14px; letter-spacing: 2px; color: var(--accent); }
+    header h1 span { color: var(--muted); margin-left: 8px; font-weight: 400; }
+    nav a {
+      color: var(--muted); text-decoration: none; margin-left: 18px;
+      font-size: 12px; letter-spacing: 1px;
+    }
+    nav a:hover { color: var(--text); }
+    .layout { display: flex; height: calc(100% - 52px); }
+    .canvas-wrap {
+      flex: 1; overflow: hidden; position: relative;
+      background:
+        radial-gradient(circle at 25% 25%, rgba(108,182,255,.04) 0%, transparent 50%),
+        radial-gradient(circle at 75% 75%, rgba(197,165,114,.04) 0%, transparent 50%),
+        var(--bg);
+    }
+    svg { display: block; }
+    .side {
+      width: 340px; border-left: 1px solid var(--line);
+      background: var(--panel); padding: 16px 18px; overflow-y: auto;
+    }
+    .side h2 {
+      margin: 0 0 8px 0; font-size: 11px; letter-spacing: 2px; color: var(--muted);
+    }
+    .side h3 {
+      margin: 4px 0 4px 0; font-size: 14px; color: var(--text);
+    }
+    .badge {
+      display: inline-block; padding: 2px 8px; border-radius: 10px;
+      font-size: 10px; letter-spacing: 1px; margin-right: 4px;
+    }
+    .b-strategy { background:#1a2638; color:var(--blue); }
+    .b-cowork   { background:#2a1f38; color:var(--violet); }
+    .b-infra    { background:#1f2e1f; color:var(--green); }
+    .b-account  { background:#2e2a1f; color:var(--accent); }
+    .b-phase    { background:#382a1f; color:var(--amber); }
+    .b-decision { background:#381f1f; color:var(--red); }
+    .b-doc      { background:#1f2937; color:var(--muted); }
+    .s-live, .s-passed, .s-done   { background:#0e2c20; color:var(--green); }
+    .s-active                     { background:#1a2638; color:var(--blue); }
+    .s-blocked                    { background:#381f1f; color:var(--red); }
+    .s-shelved, .s-idea           { background:#1f2937; color:var(--muted); }
+    .progress {
+      height: 4px; background: var(--line); border-radius: 2px; overflow: hidden; margin: 8px 0;
+    }
+    .progress > div { height: 100%; background: var(--green); }
+    pre {
+      background: var(--bg); border: 1px solid var(--line); border-radius: 4px;
+      padding: 10px; font-size: 11px; color: var(--text); overflow-x: auto;
+      white-space: pre-wrap; word-break: break-word;
+    }
+    .legend {
+      position: absolute; bottom: 14px; left: 14px;
+      background: rgba(17,22,30,.9); border: 1px solid var(--line);
+      padding: 8px 12px; border-radius: 4px; font-size: 10px;
+    }
+    .legend span { display: inline-block; margin-right: 10px; }
+    .legend i { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:4px; vertical-align:middle; }
+    .controls {
+      position: absolute; top: 14px; left: 14px;
+      background: rgba(17,22,30,.9); border: 1px solid var(--line);
+      padding: 8px 12px; border-radius: 4px; font-size: 11px; color: var(--muted);
+    }
+    .controls button {
+      background: transparent; color: var(--text); border: 1px solid var(--line);
+      padding: 3px 8px; border-radius: 3px; cursor: pointer; font-family: inherit; font-size: 11px;
+      margin: 0 2px;
+    }
+    .controls button:hover { background: var(--line); }
+    .node-circle { cursor: pointer; transition: r .15s ease; }
+    .node-circle:hover { stroke-width: 2.5; }
+    .node-circle.selected { stroke: var(--accent); stroke-width: 3; }
+    .node-label {
+      font-family: ui-monospace, Consolas, monospace; font-size: 11px;
+      fill: var(--text); pointer-events: none; user-select: none;
+    }
+    .edge { stroke: var(--line); stroke-width: 1; fill: none; }
+    .edge.highlight { stroke: var(--accent); stroke-width: 2; }
+    .placeholder { color: var(--muted); font-style: italic; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>FUTURESFORGED <span>· Workflow Tree</span></h1>
+    <nav>
+      <a href="/">DASHBOARD</a>
+      <a href="/tree">WORKFLOW TREE</a>
+      <a href="/api/tree" target="_blank">JSON</a>
+    </nav>
+  </header>
+
+  <div class="layout">
+    <div class="canvas-wrap" id="canvas-wrap">
+      <div class="controls">
+        <button onclick="fit()">FIT</button>
+        <button onclick="zoom(1.25)">+</button>
+        <button onclick="zoom(0.8)">−</button>
+        <span style="margin-left:8px;">drag to pan · click a node</span>
+      </div>
+      <svg id="svg" width="100%" height="100%"></svg>
+      <div class="legend">
+        <span><i style="background:var(--blue)"></i>strategy</span>
+        <span><i style="background:var(--violet)"></i>cowork</span>
+        <span><i style="background:var(--green)"></i>infra</span>
+        <span><i style="background:var(--accent)"></i>account</span>
+        <span><i style="background:var(--amber)"></i>phase</span>
+        <span><i style="background:var(--red)"></i>decision</span>
+        <span><i style="background:var(--muted)"></i>doc</span>
+      </div>
+    </div>
+
+    <aside class="side" id="side">
+      <h2>NODE DETAIL</h2>
+      <div class="placeholder">Click a node to inspect its status, params, parents, and children.</div>
+    </aside>
+  </div>
+
+  <script>
+    const KIND_COLOR = {
+      strategy: getComputedStyle(document.documentElement).getPropertyValue('--blue').trim(),
+      cowork:   getComputedStyle(document.documentElement).getPropertyValue('--violet').trim(),
+      infra:    getComputedStyle(document.documentElement).getPropertyValue('--green').trim(),
+      account:  getComputedStyle(document.documentElement).getPropertyValue('--accent').trim(),
+      phase:    getComputedStyle(document.documentElement).getPropertyValue('--amber').trim(),
+      decision: getComputedStyle(document.documentElement).getPropertyValue('--red').trim(),
+      doc:      getComputedStyle(document.documentElement).getPropertyValue('--muted').trim(),
+    };
+
+    let nodes = [];
+    let nodesById = {};
+    let selectedId = null;
+    let transform = { tx: 0, ty: 0, s: 1 };
+
+    function esc(s) {
+      if (s == null) return '';
+      return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+    }
+
+    // ── Layout: simple radial-by-depth layered layout ──
+    function buildLayout(nodes) {
+      // Find roots (no incoming parent edges)
+      const incoming = {};
+      const childrenOf = {};
+      nodes.forEach(n => { incoming[n.id] = 0; childrenOf[n.id] = []; });
+      nodes.forEach(n => (n.children || []).forEach(c => {
+        if (c.rel === 'parent_of' && nodesById[c.to]) {
+          incoming[c.to] = (incoming[c.to] || 0) + 1;
+          childrenOf[n.id].push(c.to);
+        }
+      }));
+      const roots = nodes.filter(n => incoming[n.id] === 0).map(n => n.id);
+
+      // BFS depth assignment
+      const depth = {};
+      const queue = roots.map(r => ({id:r, d:0}));
+      while (queue.length) {
+        const {id, d} = queue.shift();
+        if (depth[id] != null && depth[id] <= d) continue;
+        depth[id] = d;
+        (childrenOf[id] || []).forEach(c => queue.push({id:c, d:d+1}));
+      }
+      nodes.forEach(n => { if (depth[n.id] == null) depth[n.id] = 0; });
+
+      // Group by depth, place evenly along x
+      const byDepth = {};
+      Object.entries(depth).forEach(([id, d]) => {
+        (byDepth[d] = byDepth[d] || []).push(id);
+      });
+
+      const COL_W = 240;
+      const ROW_H = 56;
+      Object.entries(byDepth).forEach(([d, ids]) => {
+        ids.forEach((id, i) => {
+          const n = nodesById[id];
+          n.x = 80 + Number(d) * COL_W;
+          n.y = 80 + i * ROW_H;
+        });
+      });
+    }
+
+    function fit() {
+      const wrap = document.getElementById('canvas-wrap');
+      const W = wrap.clientWidth, H = wrap.clientHeight;
+      const xs = nodes.map(n=>n.x), ys = nodes.map(n=>n.y);
+      const xmin = Math.min(...xs), xmax = Math.max(...xs);
+      const ymin = Math.min(...ys), ymax = Math.max(...ys);
+      const bw = xmax - xmin + 200, bh = ymax - ymin + 100;
+      const s = Math.min(W/bw, H/bh, 1);
+      transform = { tx: -xmin*s + (W-bw*s)/2, ty: -ymin*s + (H-bh*s)/2, s };
+      applyTransform();
+    }
+
+    function zoom(k) {
+      transform.s *= k;
+      applyTransform();
+    }
+
+    function applyTransform() {
+      const g = document.getElementById('viewport');
+      if (g) g.setAttribute('transform',
+        `translate(${transform.tx}, ${transform.ty}) scale(${transform.s})`);
+    }
+
+    function render() {
+      const svg = document.getElementById('svg');
+      const W = svg.clientWidth, H = svg.clientHeight;
+      svg.innerHTML = `<g id="viewport"></g>`;
+      const g = document.getElementById('viewport');
+
+      // Edges
+      nodes.forEach(n => (n.children || []).forEach(c => {
+        const to = nodesById[c.to]; if (!to) return;
+        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        const dx = to.x - n.x;
+        const d = `M ${n.x} ${n.y} C ${n.x+dx*0.5} ${n.y}, ${n.x+dx*0.5} ${to.y}, ${to.x} ${to.y}`;
+        path.setAttribute('d', d);
+        path.setAttribute('class', 'edge');
+        path.setAttribute('data-from', n.id);
+        path.setAttribute('data-to', c.to);
+        g.appendChild(path);
+      }));
+
+      // Nodes
+      nodes.forEach(n => {
+        const c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        c.setAttribute('cx', n.x);
+        c.setAttribute('cy', n.y);
+        c.setAttribute('r', 9);
+        c.setAttribute('fill', KIND_COLOR[n.kind] || KIND_COLOR.doc);
+        c.setAttribute('stroke', '#0a0e14');
+        c.setAttribute('stroke-width', 2);
+        c.setAttribute('class', 'node-circle');
+        c.setAttribute('data-id', n.id);
+        c.addEventListener('click', () => selectNode(n.id));
+        g.appendChild(c);
+
+        const t = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        t.setAttribute('x', n.x + 14);
+        t.setAttribute('y', n.y + 4);
+        t.setAttribute('class', 'node-label');
+        t.textContent = n.title;
+        g.appendChild(t);
+
+        // Progress arc — small ring around the node if progress > 0
+        if (n.progress > 0 && n.progress < 100) {
+          const ring = document.createElementNS('http://www.w3.org/2000/svg','circle');
+          ring.setAttribute('cx', n.x);
+          ring.setAttribute('cy', n.y);
+          ring.setAttribute('r', 13);
+          ring.setAttribute('fill','none');
+          ring.setAttribute('stroke', KIND_COLOR[n.kind]);
+          ring.setAttribute('stroke-opacity', 0.25 + 0.005*n.progress);
+          ring.setAttribute('stroke-width', 1.5);
+          ring.setAttribute('stroke-dasharray', `${Math.PI*2*13 * n.progress/100} 1000`);
+          g.appendChild(ring);
+        }
+      });
+
+      fit();
+      enableDrag();
+    }
+
+    function selectNode(id) {
+      selectedId = id;
+      document.querySelectorAll('.node-circle').forEach(el => {
+        el.classList.toggle('selected', el.getAttribute('data-id') === id);
+      });
+      document.querySelectorAll('.edge').forEach(el => {
+        const hl = el.getAttribute('data-from') === id || el.getAttribute('data-to') === id;
+        el.classList.toggle('highlight', hl);
+      });
+      renderSide(nodesById[id]);
+    }
+
+    function renderSide(n) {
+      const el = document.getElementById('side');
+      if (!n) { el.innerHTML = '<div class="placeholder">no node</div>'; return; }
+      const params = n.params && Object.keys(n.params).length
+        ? `<h2 style="margin-top:14px;">PARAMS</h2><pre>${esc(JSON.stringify(n.params, null, 2))}</pre>`
+        : '';
+      const kids = (n.children||[]).map(c => `<div>→ ${esc(nodesById[c.to]?.title || c.to)}</div>`).join('') || '<div class="placeholder">none</div>';
+      const pars = (n.parents||[]).map(p => `<div>← ${esc(nodesById[p.from]?.title || p.from)}</div>`).join('') || '<div class="placeholder">none</div>';
+      el.innerHTML = `
+        <h2>NODE DETAIL</h2>
+        <div>
+          <span class="badge b-${esc(n.kind)}">${esc(n.kind)}</span>
+          <span class="badge s-${esc(n.status)}">${esc(n.status)}</span>
+        </div>
+        <h3>${esc(n.title)}</h3>
+        <div style="color:var(--muted); font-size:11px;">${esc(n.id)}</div>
+        ${n.summary ? `<div style="margin-top:8px;">${esc(n.summary)}</div>` : ''}
+        <div class="progress"><div style="width:${n.progress||0}%"></div></div>
+        <div style="color:var(--muted); font-size:11px;">${n.progress||0}% · ${n.blocker?'blocker: '+esc(n.blocker):''}</div>
+        ${params}
+        <h2 style="margin-top:14px;">CHILDREN</h2>${kids}
+        <h2 style="margin-top:14px;">PARENTS</h2>${pars}
+      `;
+    }
+
+    function enableDrag() {
+      const wrap = document.getElementById('canvas-wrap');
+      let dragging = false, lx = 0, ly = 0;
+      wrap.addEventListener('mousedown', e => {
+        if (e.target.closest('button')) return;
+        dragging = true; lx = e.clientX; ly = e.clientY;
+      });
+      window.addEventListener('mousemove', e => {
+        if (!dragging) return;
+        transform.tx += e.clientX - lx;
+        transform.ty += e.clientY - ly;
+        lx = e.clientX; ly = e.clientY;
+        applyTransform();
+      });
+      window.addEventListener('mouseup', () => dragging = false);
+      wrap.addEventListener('wheel', e => {
+        e.preventDefault();
+        zoom(e.deltaY < 0 ? 1.1 : 0.9);
+      }, { passive: false });
+    }
+
+    async function load() {
+      const r = await fetch('/api/tree');
+      const j = await r.json();
+      nodes = j.nodes || [];
+      nodesById = {};
+      nodes.forEach(n => nodesById[n.id] = n);
+      buildLayout(nodes);
+      render();
+    }
+
+    load();
+    // Refresh every 30s
+    setInterval(load, 30000);
+  </script>
+</body>
+</html>

@@ -1,0 +1,50 @@
+# ============================================================
+# FuturesForged Virtual Office — Render Blueprint
+# ============================================================
+# Deploy: Render dashboard → New → Blueprint → point at the repo
+# containing this file. Both services share the same env group.
+# ============================================================
+
+services:
+  # ── Web dashboard + API ─────────────────────────────────────
+  - type: web
+    name: futuresforged-vo-web
+    runtime: python
+    region: oregon
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn -w 2 -b 0.0.0.0:$PORT server.web_app:app
+    healthCheckPath: /api/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.3"
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+      - key: VO_ENABLE_SIGNAL_BUTTONS
+        value: "0"
+
+  # ── Telegram worker (long-polls Telegram + pushes alerts) ──
+  - type: worker
+    name: futuresforged-vo-worker
+    runtime: python
+    region: oregon
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -m server.worker
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.3"
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_CHAT_ID
+        sync: false
+      - key: VO_WEB_URL
+        sync: false
+      - key: VO_ENABLE_SIGNAL_BUTTONS
+        value: "0"
